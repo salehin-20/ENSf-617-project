@@ -21,7 +21,7 @@ def plot_calibration(pred_df: pd.DataFrame, quantiles, out_path: Path):
         cover = (y <= pred_df[col].values).mean()
         rows.append((q, cover))
     qs, cov = zip(*rows)
-    plt.figure(figsize=(5,5))
+    plt.figure(figsize=(4, 4))
     plt.plot(qs, qs, "k--", label="ideal")
     plt.plot(qs, cov, "o-", label="TFT")
     plt.xlabel("Nominal quantile")
@@ -30,7 +30,7 @@ def plot_calibration(pred_df: pd.DataFrame, quantiles, out_path: Path):
     plt.legend()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     plt.tight_layout()
-    plt.savefig(out_path)
+    plt.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close()
 
 
@@ -39,33 +39,39 @@ def plot_sample_day(pred_df: pd.DataFrame, day: pd.Timestamp, out_path: Path):
     if day_df.empty:
         return
     day_df = day_df.sort_values("ds")
-    plt.figure(figsize=(10,4))
+    plt.figure(figsize=(9, 3.5))
     plt.plot(day_df["ds"], day_df["y"], label="Actual", color="black")
     if "p50" in day_df:
         plt.plot(day_df["ds"], day_df["p50"], label="Median", color="C0")
     if {"p10", "p90"}.issubset(day_df.columns):
         plt.fill_between(day_df["ds"], day_df["p10"], day_df["p90"], color="C0", alpha=0.2, label="P10-P90")
     plt.title(f"Forecast for {day.date()}")
-    plt.ylabel("Load")
-    plt.xticks(rotation=30)
+    plt.ylabel("Load (MW)")
+    plt.xticks(rotation=25)
     plt.legend()
     plt.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(out_path)
+    plt.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close()
 
 
-def plot_extremes(pred_df: pd.DataFrame, data_df: pd.DataFrame, out_path: Path):
-    merged = pred_df.merge(data_df[["ds", "extreme_flag"]], on="ds", how="left")
+def plot_extremes(pred_df: pd.DataFrame, data_df: pd.DataFrame | None, out_path: Path):
+    if data_df is not None and "extreme_flag" in data_df.columns:
+        merged = pred_df.merge(data_df[["ds", "extreme_flag"]], on="ds", how="left")
+    else:
+        merged = pred_df.copy()
+        q5 = merged["y"].quantile(0.05)
+        q95 = merged["y"].quantile(0.95)
+        merged["extreme_flag"] = ((merged["y"] <= q5) | (merged["y"] >= q95)).astype(int)
     merged["abs_err"] = (merged["p50"] - merged["y"]).abs()
     bars = merged.groupby("extreme_flag")["abs_err"].mean()
-    plt.figure(figsize=(4,4))
+    plt.figure(figsize=(3.5, 3.5))
     bars.plot(kind="bar", color=["C1", "C0"])
-    plt.xticks([0,1],["Normal","Extreme"], rotation=0)
-    plt.ylabel("MAE")
+    plt.xticks([0, 1], ["Normal", "Extreme"], rotation=0)
+    plt.ylabel("MAE (MW)")
     plt.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(out_path)
+    plt.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close()
 
 
@@ -82,7 +88,11 @@ def main():
     pred_df = load_predictions(Path(args.pred_path))
     if pred_df["ds"].dtype.tz is None:
         pred_df["ds"] = pd.to_datetime(pred_df["ds"], utc=True)
-    data_df = pd.read_parquet(Path(cfg["data"]["processed_dir"]) / "all.parquet")
+
+    data_path = Path(cfg["data"]["processed_dir"]) / "all.parquet"
+    data_df = None
+    if data_path.exists():
+        data_df = pd.read_parquet(data_path)
 
     out_dir = Path(args.out_dir)
     plot_calibration(pred_df, quantiles, out_dir / "calibration_tft.png")
@@ -91,7 +101,6 @@ def main():
     plot_sample_day(pred_df, last_day, out_dir / "sample_day_tft.png")
 
     plot_extremes(pred_df, data_df, out_dir / "extreme_mae_tft.png")
-
 
 if __name__ == "__main__":
     main()

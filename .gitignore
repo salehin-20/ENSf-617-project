@@ -9,7 +9,6 @@ __pycache__/
 venv/
 
 # Data and outputs
-data/raw/
 outputs/
 
 # Large binary files in reports

@@ -10,9 +10,11 @@ venv/
 
 # Data and outputs
 data/raw/
-data/processed/
-reports/
 outputs/
+
+# Large binary files in reports
+reports/**/*.ckpt
+reports/**/*.parquet
 
 # Jupyter
 .ipynb_checkpoints/

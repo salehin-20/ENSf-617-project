@@ -14,7 +14,7 @@ sys.path.append(str(ROOT))
 
 def make_datasets(df: pd.DataFrame, train_end, val_end, lookback: int, horizon: int):
     df = df.sort_values("ds").copy()
-    df["time_idx"] = df["ds"].astype("int64") // 10**9 // 3600
+    df["time_idx"] = df["ds"].dt.tz_convert("UTC").view("int64") // 10**9 // 3600
     df["group"] = "nyiso"
     train_df = df[df["ds"] <= train_end]
     test_df = df[df["ds"] > val_end]
@@ -54,7 +54,7 @@ def main():
     parser.add_argument("--horizon", type=int, default=24)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--max_batches", type=int, default=None, help="Optional cap for fast debug")
-    parser.add_argument("--save_pred", type=Path, default=Path("reports/tft/preds.parquet"))
+    parser.add_argument("--save_pred", type=Path, default=Path("reports/tft/preds.csv"))
     parser.add_argument("--save_metrics", type=Path, default=Path("reports/tft/metrics.yaml"))
     args = parser.parse_args()
 
@@ -66,7 +66,9 @@ def main():
     train_end = pd.to_datetime(cfg["splits"]["train_end"]).tz_localize(tz)
     val_end = pd.to_datetime(cfg["splits"]["val_end"]).tz_localize(tz)
 
-    df = pd.read_parquet(Path(cfg["data"]["processed_dir"]) / "all.parquet")
+    df = pd.read_csv(Path(cfg["data"]["processed_dir"]) / "all.csv")
+    df["ds"] = pd.to_datetime(df["ds"], utc=True, errors="coerce").dt.tz_convert(tz)
+    df.dropna(subset=["ds"], inplace=True)
 
     _, test_ds = make_datasets(df, train_end, val_end, args.lookback, args.horizon)
     test_loader = test_ds.to_dataloader(
@@ -129,7 +131,7 @@ def main():
     pred_df = pd.DataFrame({"ds": ds_series, "y": target_vals})
     for qi, q in enumerate(quantiles):
         pred_df[f"p{int(q*100):02d}"] = flat_preds[:, qi]
-    pred_df.to_parquet(args.save_pred, index=False)
+    pred_df.to_csv(args.save_pred, index=False)
 
     metrics = {
         "mae": mae,
@@ -143,3 +145,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

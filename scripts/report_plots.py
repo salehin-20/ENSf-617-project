@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 def load_predictions(path: Path) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Prediction file not found: {path}")
-    return pd.read_parquet(path)
+    return pd.read_csv(path, parse_dates=["ds"])
 
 
 def plot_calibration(pred_df: pd.DataFrame, quantiles, out_path: Path):
@@ -78,21 +78,24 @@ def plot_extremes(pred_df: pd.DataFrame, data_df: pd.DataFrame | None, out_path:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="src/config.yaml")
-    parser.add_argument("--pred_path", default="reports/tft/preds.parquet")
+    parser.add_argument("--pred_path", default="reports/tft/preds.csv")
     parser.add_argument("--out_dir", default="reports")
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text())
     quantiles = cfg.get("quantiles", [0.1, 0.5, 0.9])
 
+    tz = cfg.get("timezone", "America/New_York")
     pred_df = load_predictions(Path(args.pred_path))
-    if pred_df["ds"].dtype.tz is None:
-        pred_df["ds"] = pd.to_datetime(pred_df["ds"], utc=True)
+    pred_df["ds"] = pd.to_datetime(pred_df["ds"], utc=True, errors="coerce").dt.tz_convert(tz)
+    pred_df.dropna(subset=["ds"], inplace=True)
 
-    data_path = Path(cfg["data"]["processed_dir"]) / "all.parquet"
+    data_path = Path(cfg["data"]["processed_dir"]) / "all.csv"
     data_df = None
     if data_path.exists():
-        data_df = pd.read_parquet(data_path)
+        data_df = pd.read_csv(data_path)
+        data_df["ds"] = pd.to_datetime(data_df["ds"], utc=True, errors="coerce").dt.tz_convert(tz)
+        data_df.dropna(subset=["ds"], inplace=True)
 
     out_dir = Path(args.out_dir)
     plot_calibration(pred_df, quantiles, out_dir / "calibration_tft.png")

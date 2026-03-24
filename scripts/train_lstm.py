@@ -99,8 +99,11 @@ def main():
     cfg = yaml.safe_load(Path(args.config).read_text())
     train_end = cfg["splits"]["train_end"]
     val_end = cfg["splits"]["val_end"]
+    tz = cfg.get("timezone", "America/New_York")
 
-    df = pd.read_parquet(Path(cfg["data"]["processed_dir"]) / "all.parquet")
+    df = pd.read_csv(Path(cfg["data"]["processed_dir"]) / "all.csv")
+    df["ds"] = pd.to_datetime(df["ds"], utc=True, errors="coerce").dt.tz_convert(tz)
+    df.dropna(subset=["ds"], inplace=True)
 
     dm = LoadDataModule(df, train_end, val_end, lookback=args.lookback, horizon=args.horizon, batch_size=args.batch_size)
 
@@ -125,3 +128,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

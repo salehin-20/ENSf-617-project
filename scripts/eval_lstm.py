@@ -64,7 +64,7 @@ def main():
     train_end = pd.to_datetime(cfg["splits"]["train_end"]).tz_localize("America/New_York")
     val_end = pd.to_datetime(cfg["splits"]["val_end"]).tz_localize("America/New_York")
 
-    df = pd.read_parquet(Path(cfg["data"]["processed_dir"]) / "all.parquet").sort_values("ds")
+    df = pd.read_csv(Path(cfg["data"]["processed_dir"]) / "all.csv", parse_dates=["ds"]).sort_values("ds")
     feat_cols = ["y", "temp", "holiday", "extreme_flag"]
     extreme_col = feat_cols.index("extreme_flag")
 

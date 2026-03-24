@@ -55,12 +55,56 @@ scripts/
 - Define train/val/test splits and extreme-weather thresholds in a shared config.
 
 
-## How to Run
+## How to Run (WSL/Linux)
 
-- Activate env: `source .venv/bin/activate`
-- Data (optional refresh): `python scripts/data_pull.py --force --refresh-weather`
-- Train TFT (example): `python scripts/train_tft.py --max_epochs 15`
-- Evaluate TFT: `python scripts/eval_tft.py --checkpoint reports/tft/lightning_logs/version_3/checkpoints/epoch=14-step=10170.ckpt --device cuda --batch_size 256 --num_workers 0`
-- Plots: `python scripts/report_plots.py`
-- Notebook: open `notebooks/notebook.ipynb` (Jupyter) for metrics/plots walkthrough.
-- Runbook: see `617-project-group-3.md` for full details.
+1) Python + venv
+```bash
+sudo apt update && sudo apt install -y python3 python3-venv python3-pip python-is-python3
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt   # installs torch & friends
+```
+If `torch` is missing later, reinstall via CPU wheel:
+`pip install --index-url https://download.pytorch.org/whl/cpu torch`
+
+2) Optional: EIA API key for load data
+`export EIA_API_KEY=3964PjpjKcuYZ1Qs8qjZWmblIg21yfCdZ0rqewKO`
+
+3) Pull data (rebuild + refresh caches)
+```bash
+python scripts/data_pull.py --force --refresh-weather
+```
+
+4) Train models
+```bash
+# TFT (produces checkpoints under reports/tft/lightning_logs/)
+python scripts/train_tft.py --max_epochs 15 --batch_size 64
+# LSTM baseline
+python scripts/train_lstm.py --max_epochs 5 --batch_size 128 --lookback 24 --horizon 24
+```
+
+5) Evaluate TFT (pick an existing checkpoint)
+Available ckpts on disk:
+- reports/tft/lightning_logs/version_3/checkpoints/epoch=14-step=10170.ckpt
+- reports/tft/lightning_logs/version_4/checkpoints/epoch=19-step=13560.ckpt
+- reports/tft/lightning_logs/version_5/checkpoints/epoch=4-step=3390.ckpt
+Example:
+```bash
+python scripts/eval_tft.py --checkpoint reports/tft/lightning_logs/version_4/checkpoints/epoch=19-step=13560.ckpt
+```
+This writes reports/tft/preds.csv and reports/tft/metrics.yaml.
+
+6) Plots (uses latest preds):
+```bash
+python scripts/report_plots.py
+```
+Outputs: reports/calibration_tft.png, reports/sample_day_tft.png, reports/extreme_mae_tft.png.
+
+Common pitfalls we hit:
+- python not found ? install python3 and python-is-python3 (step 1).
+- torch ModuleNotFoundError ? reinstall via PyTorch index (see step 1 note).
+- FileNotFoundError on checkpoints ? use real ckpts above (not placeholder version_0 paths).
+
+Notebook: open notebooks/notebook.ipynb for walkthrough.
+Runbook: see 617-project-group-3.md for full details.
+

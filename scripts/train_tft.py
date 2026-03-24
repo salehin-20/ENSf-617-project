@@ -14,7 +14,7 @@ sys.path.append(str(ROOT))
 
 def make_datasets(df: pd.DataFrame, train_end, val_end, lookback: int, horizon: int):
     df = df.sort_values("ds").copy()
-    df["time_idx"] = df["ds"].astype("int64") // 10**9 // 3600
+    df["time_idx"] = df["ds"].dt.tz_convert("UTC").view("int64") // 10**9 // 3600
     df["group"] = "nyiso"
     train_df = df[df["ds"] <= train_end]
     val_df = df[(df["ds"] > train_end) & (df["ds"] <= val_end)]
@@ -59,10 +59,13 @@ def main():
 
     cfg = yaml.safe_load(Path(args.config).read_text())
     quantiles = cfg.get("quantiles", [0.1, 0.5, 0.9])
-    train_end = pd.to_datetime(cfg["splits"]["train_end"]).tz_localize("America/New_York")
-    val_end = pd.to_datetime(cfg["splits"]["val_end"]).tz_localize("America/New_York")
+    tz = cfg.get("timezone", "America/New_York")
+    train_end = pd.to_datetime(cfg["splits"]["train_end"]).tz_localize(tz)
+    val_end = pd.to_datetime(cfg["splits"]["val_end"]).tz_localize(tz)
 
-    df = pd.read_parquet(Path(cfg["data"]["processed_dir"]) / "all.parquet")
+    df = pd.read_csv(Path(cfg["data"]["processed_dir"]) / "all.csv")
+    df["ds"] = pd.to_datetime(df["ds"], utc=True, errors="coerce").dt.tz_convert(tz)
+    df.dropna(subset=["ds"], inplace=True)
 
     train_ds, val_ds = make_datasets(df, train_end, val_end, args.lookback, args.horizon)
 
@@ -94,3 +97,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

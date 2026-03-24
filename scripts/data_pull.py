@@ -150,7 +150,7 @@ def fetch_weather(start: dt.date, end: dt.date, raw_dir: Path, tz: str) -> pd.Da
     wx = pd.concat(frames, ignore_index=True)
     wx.dropna(subset=["ds"], inplace=True)
     wx = wx.drop_duplicates(subset=["ds"]).sort_values("ds")
-    wx.to_parquet(raw_dir / "weather_raw.parquet", index=False)
+    wx.to_csv(raw_dir / "weather_raw.csv", index=False)
     return wx
 
 
@@ -183,7 +183,7 @@ def main():
     raw_weather_dir = Path(cfg["data"]["raw_dir"]) / "weather"
     processed_dir = Path(cfg["data"]["processed_dir"])
     ensure_dirs(raw_load_dir, raw_weather_dir, processed_dir)
-    out_path = processed_dir / "all.parquet"
+    out_path = processed_dir / "all.csv"
 
     if out_path.exists() and not args.force:
         print(f"{out_path} already exists; use --force to rebuild")
@@ -199,9 +199,12 @@ def main():
         load_df = fetch_load_mis(start, end, raw_load_dir, tz)
 
     print(f"Fetching Open-Meteo weather {start} to {end}...")
-    cached_weather = raw_weather_dir / "weather_raw.parquet"
+    cached_weather = raw_weather_dir / "weather_raw.csv"
     if cached_weather.exists() and not args.refresh_weather:
-        weather_df = pd.read_parquet(cached_weather)
+        weather_df = pd.read_csv(cached_weather)
+        weather_df["ds"] = pd.to_datetime(weather_df["ds"], utc=True, errors="coerce")
+        weather_df.dropna(subset=["ds"], inplace=True)
+        weather_df["ds"] = weather_df["ds"].dt.tz_convert(tz)
         print(f"Loaded cached weather from {cached_weather}")
     else:
         weather_df = fetch_weather(start, end, raw_weather_dir, tz)
@@ -217,7 +220,7 @@ def main():
     merged.dropna(subset=["y", "temp"], inplace=True)
     merged = add_features(merged, tz, cfg.get("extreme", {}))
 
-    merged.to_parquet(out_path, index=False)
+    merged.to_csv(out_path, index=False)
     print(f"Saved {len(merged):,} rows to {out_path}")
 
 
